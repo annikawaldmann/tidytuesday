@@ -1,1 +1,138 @@
 
+## Tidytuesday 15.09.2020
+## Federal and Public Spending on Children
+## A. Waldmann
+
+
+## Package loading
+#############################
+library(tidyverse)
+library(tidytuesdayR)
+library(viridis) # Use Viridis Colours
+library(urbnmapr) # US Map
+library(patchwork) # Combine plots
+
+
+## Retrieve data
+#############################
+tuesdata <- tt_load('2020-09-15')
+df <- as.data.frame(tuesdata$kids)
+
+
+## EDA 
+#############################
+View(df)
+head(df)
+
+summary(df)
+
+table(df$state)
+table(df$variable)
+table(df$year)
+
+
+## Data wrangling
+#############################
+df$state <- as.factor(as.character(df$state))
+
+# Sum up Spending
+df2 <- df %>% 
+    group_by(state, year) %>% 
+    summarize(total_spending = sum(inf_adj_perchild))
+
+# Relative Change in Spending over Time
+df3 <- df2 %>% 
+    filter(year == 2000 | year == 2015) %>% 
+    pivot_wider(names_from = year, values_from = total_spending) 
+
+colnames(df3) <- c("state_name", "year2000", "year2015")
+
+df3$rel_change <- round(df3$year2015 / df3$year2000, 1) 
+
+
+## Draw US Maps 
+#############################
+## Add variable "geometry" to df3
+map_data <- as.data.frame(left_join(df3,
+                                    get_urbn_map(map = "states", sf = TRUE),
+                                    by = "state_name") )
+
+
+## Draw plot for Year 2000
+p1 <- ggplot() +
+    geom_sf(map_data,
+            mapping = aes(geometry = geometry, fill = year2000),
+            color = "#ffffff", size = 0.25) +
+    scale_fill_viridis(
+        option = 'D',
+        limits = c(0, 40),
+        space = "Lab",
+        na.value = "grey50",
+        guide = "colourbar"
+    ) +
+    geom_sf_text(data = get_urbn_labels(map = "states", sf = TRUE), 
+                 aes(label = state_abbv), 
+                 size = 2) +
+    labs(fill = 'Spending per child, in $1000',
+         x = '',
+         y = '',
+         title = 'Total Federal and Public Spending on Children in the US',
+         subtitle = 'Spending in Year 2000 adjusted for inflation, per child in $1000') +
+    theme(legend.position = "bottom",
+          legend.text = element_text(size = 7),
+          legend.title = element_text(size = 8),
+          title = element_text(size = 8)) +
+    coord_sf(datum = NA) 
+
+
+p1
+
+
+
+## Rel Change
+p3 <- ggplot() +
+    geom_sf(map_data,
+            mapping = aes(geometry = geometry, fill = rel_change),
+            color = "#ffffff", size = 0.25) +
+    scale_fill_gradient(
+        high = "#132B43",
+        low = "#56B1F7",
+        limits = c(1, 2),
+        space = "Lab",
+        na.value = "grey50",
+        guide = "colourbar",
+        labels = scales::percent
+        ) +
+     geom_sf_text(data = get_urbn_labels(map = "states", sf = TRUE), 
+                 aes(label = state_abbv), 
+                 size = 2) +
+    labs(fill = 'Relative Change (in %)',
+         x = '',
+         y = '',
+         title = #'Total Federal and Public Spending on Children in the US, adj. per Child',
+         '', 
+             subtitle = 'Relative Change in Spending from 2000 (baseline, 100%) to 2015') +
+    theme(legend.position = "bottom",
+          legend.text = element_text(size = 7),
+          legend.title = element_text(size = 8),
+          title = element_text(size = 9)) +
+    coord_sf(datum = NA) 
+
+p3
+
+
+## Combine plots
+#############################
+p <- p1 + p3
+p
+
+
+# Save Plot 
+#############################
+ggsave(filename = paste0(tmpDir, "/2020-09-15 Spending.png"), 
+       plot = p, 
+       device = "png", 
+       scale = 0.5,
+       units = "in", 
+       width = 16, 
+       height = 9)
